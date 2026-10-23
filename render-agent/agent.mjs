@@ -14,7 +14,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const here = path.dirname(fileURLToPath(import.meta.url));
 for (const file of [path.join(here, 'render-agent.env')]) {
   if (!fs.existsSync(file)) continue;
@@ -127,9 +127,17 @@ async function doJob(job) {
   await run('nice', ['-n', NICE, 'npx', 'remotion', 'still', job.composition, jpg, `--frame=${mid}`, '--image-format=jpeg', '--log=error'], { minutes: 5 });
 
   // 3. Send it to the Hub.
-  await status(job, { status: 'rendering', stage: 'Sending the video to the Hub' });
+  await status(job, { status: 'rendering', stage: `Sending the video to the Hub (${(fs.statSync(mp4).size / 1048576).toFixed(1)} MB)` });
   if (fs.existsSync(jpg)) await api(`/render-agent/jobs/${job.id}/poster`, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: await fs.openAsBlob(jpg), timeout: 120000 }).catch(e => say('poster:', e.message));
-  const up = await api(`/render-agent/jobs/${job.id}/video?seconds=${job.seconds || ''}`, { method: 'PUT', headers: { 'Content-Type': 'video/mp4' }, body: await fs.openAsBlob(mp4), timeout: 15 * 60000 }).catch(e => ({ ok: false, statusText: e.message }));
+  // Up to 4 tries, so a dropped connection doesn't throw away a finished render.
+  const mb = (fs.statSync(mp4).size / 1048576).toFixed(1);
+  let up = null;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    if (attempt > 1) { await status(job, { status: 'rendering', stage: `Sending the video to the Hub (${mb} MB, try ${attempt} of 4)` }); await new Promise(z => setTimeout(z, attempt * 15000)); }
+    up = await api(`/render-agent/jobs/${job.id}/video?seconds=${job.seconds || ''}`, { method: 'PUT', headers: { 'Content-Type': 'video/mp4' }, body: await fs.openAsBlob(mp4), timeout: 18 * 60000 }).catch(e => ({ ok: false, statusText: e.message }));
+    if (up.ok || [409, 413, 415, 401].includes(up.status)) break;
+    say(`job ${job.id}: upload try ${attempt} failed: ${up.status || ''} ${up.statusText || ''}`);
+  }
   for (const f of [mp4, jpg]) try { fs.unlinkSync(f); } catch { /* gone */ }
   if (!up.ok) return status(job, { status: 'error', error: `The video was made but couldn't be sent to the Hub (${up.status || ''} ${up.statusText || ''}).` });
   say(`job ${job.id}: ${what} done`);
