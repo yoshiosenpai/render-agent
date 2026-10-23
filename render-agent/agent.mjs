@@ -14,7 +14,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const here = path.dirname(fileURLToPath(import.meta.url));
 for (const file of [path.join(here, 'render-agent.env')]) {
   if (!fs.existsSync(file)) continue;
@@ -62,6 +62,16 @@ function run(cmd, args, { minutes, onLine, keepAlive } = {}) {
 }
 const tail = (t, n = 3000) => String(t || '').slice(-n);
 
+// Is the composition in the project? `--quiet` prints only the IDs; older Remotion versions get the
+// normal table instead. (The table is printed at the "info" log level, so never pass --log=error here.)
+async function listed(id) {
+  const has = out => out.split(/[\s│|,]+/).includes(id);
+  const q = await run('npx', ['remotion', 'compositions', '--quiet'], { minutes: 6 });
+  if (has(q.out)) return { ok: true, out: q.out };
+  const full = await run('npx', ['remotion', 'compositions'], { minutes: 6 });
+  return { ok: has(full.out), out: `${tail(q.out, 1500)}\n${tail(full.out, 3000)}` };
+}
+
 async function doJob(job) {
   const folder = path.join(PROJECT, job.folder);
   const outDir = path.join(PROJECT, 'out', 'hub');
@@ -99,8 +109,8 @@ async function doJob(job) {
     return status(job, { status: 'error', error: why, log: tail(c.out), cost_usd: Number.isFinite(cost) ? cost : undefined });
   }
   await status(job, { status: 'building', stage: 'Checking the composition', log: tail(result.result, 2000), cost_usd: Number.isFinite(cost) ? cost : undefined });
-  const list = await run('npx', ['remotion', 'compositions', '--log=error'], { minutes: 5 });
-  if (!list.out.split(/\s+/).includes(job.composition)) return status(job, { status: 'error', error: `Claude finished, but the composition ${job.composition} isn't in the project. Ask for it again.`, log: tail(list.out) });
+  const list = await listed(job.composition);
+  if (!list.ok) return status(job, { status: 'error', error: `Claude finished, but the composition ${job.composition} isn't in the project. Ask for it again.`, log: tail(`${result.result || ''}\n\n--- npx remotion compositions ---\n${list.out}`) });
 
   // 2. Render it, at low priority.
   const mp4 = path.join(outDir, `job-${job.id}.mp4`);
