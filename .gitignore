@@ -3,3 +3,4 @@ render-agent.env
 *.env
 out/
 stills/
+.update-failed

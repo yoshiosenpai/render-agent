@@ -118,13 +118,56 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 UNIT
 
+# Auto-update: every 5 minutes the machine asks GitHub for a new commit. If there is one it is
+# pulled, checked (code loads, a 2-second test video renders) and used once the videos in hand are
+# done; if the check fails the previous version is put back. Turn off with AUTO_UPDATE=0.
+if [ "${AUTO_UPDATE:-1}" != "0" ]; then
+  sudo tee /etc/systemd/system/$SERVICE-update.service >/dev/null <<UNIT
+[Unit]
+Description=Cytron render helper: pull and apply updates from GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=$USER_NAME
+WorkingDirectory=$HERE
+Environment=HOME=$HOME
+Environment=PATH=$SVC_PATH
+Environment=CHROMIUM_PATH=${CHROMIUM_PATH:-$CHROME}
+ExecStart=/bin/bash $HERE/update.sh --auto
+Nice=15
+TimeoutStartSec=10min
+UNIT
+  sudo tee /etc/systemd/system/$SERVICE-update.timer >/dev/null <<UNIT
+[Unit]
+Description=Check GitHub for render helper updates every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+fi
+
 sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE
 sudo systemctl restart $SERVICE
+if [ "${AUTO_UPDATE:-1}" != "0" ]; then
+  sudo systemctl enable --now $SERVICE-update.timer
+  AUTO_MSG="Auto-update: on (checks GitHub every 5 minutes). Log:  journalctl -u $SERVICE-update"
+else
+  sudo systemctl disable --now $SERVICE-update.timer 2>/dev/null || true
+  AUTO_MSG="Auto-update: off (AUTO_UPDATE=0). Update by hand with:  bash $HERE/update.sh"
+fi
 sleep 3
 systemctl --no-pager --lines=8 status $SERVICE || true
 echo
 echo "Installed: ${RENDER_JOBS:-1} job(s) at once, up to ${MEM_MAX_MB} MB memory and ${CPU_QUOTA}% CPU."
 echo "Follow it with:  journalctl -u $SERVICE -f"
-echo "Update it later with:  bash $HERE/update.sh"
+echo "$AUTO_MSG"
 echo "The Hub's System health page shows the render machine as online within a minute."

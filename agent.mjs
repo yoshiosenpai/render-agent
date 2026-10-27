@@ -15,7 +15,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const here = path.dirname(fileURLToPath(import.meta.url));
 for (const file of [path.join(here, 'render-agent.env')]) {
   if (!fs.existsSync(file)) continue;
@@ -251,10 +251,21 @@ for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => {
   await Promise.all([...current].map(j => status(j, { status: 'error', error: 'The render helper was restarted while making this. Ask for it again.' })));
   process.exit(0);
 });
+// SIGUSR2 (sent by update.sh after a new version is pulled): finish the jobs in hand, take no new
+// ones, then exit; systemd starts the new version. Nobody's video is cut off by an update.
+let draining = false;
+process.on('SIGUSR2', () => {
+  if (draining) return;
+  draining = true;
+  say(`update: finishing ${current.size} job${current.size === 1 ? '' : 's'} in hand, then restarting with the new version`);
+  const done = () => { if (!current.size) { say('update: restarting now'); process.exit(0); } setTimeout(done, 2000); };
+  done();
+});
 
 async function worker(n) {
   await new Promise(z => setTimeout(z, n * 1500)); // don't all ask at the same moment
   for (;;) {
+    if (draining) return;
     let job = null;
     try {
       const r = await api(`/render-agent/next?machine=${encodeURIComponent(MACHINE)}&v=${VERSION}&slots=${SLOTS}`);

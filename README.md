@@ -23,10 +23,21 @@ bash install.sh
 `RENDER_TOKEN` (same as the Hub's `.env`), then run it again. It checks the Hub answers, tests the
 engine with a 2-second video and installs the `cytron-render` service.
 
-## Update
-```
-bash ~/render-agent/update.sh
-```
+## Updates (automatic)
+`install.sh` also installs a timer: every 5 minutes the machine checks GitHub. When there is a new
+commit it pulls it, checks it (the code loads and the engine renders a 2-second test video) and the
+helper switches to it once the videos it is making are done. If the check fails, the previous
+version is put back and keeps running. So: push to `main`, and within about 5 minutes the render
+machine runs it. Nobody needs to be at the machine.
+
+- See what it did: `journalctl -u cytron-render-update` (the Hub's System health shows the new version).
+- Update now by hand: `bash ~/render-agent/update.sh`
+- Turn it off: `AUTO_UPDATE=0` in `render-agent.env`, then `bash install.sh`.
+- A change to `install.sh` itself (service limits, new packages) still needs one `bash install.sh` at the machine.
+- It never overwrites edits made on the machine: it stops and logs it instead (`git status`).
+- Anyone who can push to this repo can run code on this machine: keep the repo's push access to the
+  team, and protect `main` (Settings > Branches). If the repo is private, give the machine a
+  read-only deploy key.
 
 ## Files
 - `agent.mjs`: the helper (polls the Hub, runs Claude Code, runs the engine, uploads).
