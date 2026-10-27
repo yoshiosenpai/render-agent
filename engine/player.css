@@ -1,0 +1,14 @@
+html, body { margin: 0; height: 100%; background: #0e1014; color: #e8eaee; font: 14px/1.3 'Inter', system-ui, sans-serif; }
+body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; overflow: hidden; }
+#cv { display: block; max-width: calc(100vw - 16px); max-height: calc(100vh - 92px); width: auto; height: auto; border-radius: 6px; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.45); cursor: pointer; background: #000; }
+body.render { display: block; background: #000; }
+body.render #cv { max-width: none; max-height: none; border-radius: 0; box-shadow: none; }
+.bar { padding-bottom: 10px; display: flex; align-items: center; gap: 8px; width: min(100vw - 16px, 760px); flex-wrap: wrap; justify-content: center; }
+.bar .b, .bar .chip { background: #1f232b; color: #e8eaee; border: 1px solid #343a46; border-radius: 6px; height: 30px; min-width: 34px; padding: 0 8px; font: inherit; cursor: pointer; }
+.bar .b:hover, .bar .chip:hover { border-color: #5a6578; }
+.bar .b.off { opacity: 0.45; text-decoration: line-through; }
+.bar .scrub { flex: 1 1 200px; accent-color: #e8524a; }
+.bar .time { font: 12px 'IBM Plex Mono', monospace; color: #a9b0bd; min-width: 104px; text-align: center; }
+.bar .chips { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.bar .chip { height: 24px; min-width: 26px; padding: 0 6px; font-size: 12px; }
+.bar .chip.on { background: #e8524a; border-color: #e8524a; color: #fff; }
