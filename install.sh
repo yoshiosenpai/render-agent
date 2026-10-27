@@ -60,6 +60,13 @@ CODE="$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $RENDER
 case "$CODE" in
   404) echo "The Hub answers at $HUB and accepts the token." ;;
   401) echo "The Hub at $HUB refused RENDER_TOKEN: type the same token as in the Hub's .env into render-agent.env."; exit 1 ;;
+  403)
+    echo "Something in front of the Hub blocked this machine (HTTP 403): the Hub itself never answers 403 here."
+    echo "Usually Cloudflare (Bot Fight Mode, a WAF rule or Access). What it sent back:"
+    curl -s -D - -o /tmp/hub403.txt -H "Authorization: Bearer $RENDER_TOKEN" "$HUB/render-agent/media/0" | grep -iE '^(server|cf-mitigated|cf-ray|location):' || true
+    head -c 300 /tmp/hub403.txt; echo; rm -f /tmp/hub403.txt
+    echo "Fix: in Cloudflare, let /render-agent/* through (README: 'HTTP 403'). The token still protects it."
+    exit 1 ;;
   *) echo "Can't reach the Hub at $HUB (HTTP $CODE). Check HUB_URL in render-agent.env and the machine's internet."; exit 1 ;;
 esac
 

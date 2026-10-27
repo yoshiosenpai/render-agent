@@ -39,6 +39,19 @@ machine runs it. Nobody needs to be at the machine.
   team, and protect `main` (Settings > Branches). If the repo is private, give the machine a
   read-only deploy key.
 
+## HTTP 403 from install.sh
+The Hub never answers 403 to the helper, so a 403 comes from Cloudflare in front of it. The helper's
+requests are scripts, not browsers, and bot protection blocks them. Let `/render-agent/*` through;
+`RENDER_TOKEN` still protects it. In the Cloudflare dashboard for cytron.io:
+- `cf-mitigated: challenge` (Bot Fight Mode / a challenge): on the Pro plan or above, add a WAF custom rule
+  `URI Path starts with /render-agent/` with action **Skip** (all remaining custom rules, Super Bot
+  Fight Mode, Browser Integrity Check, Security Level). On the Free plan, Bot Fight Mode can't be
+  skipped: turn it off (Security > Bots). The Hub has its own sign-in and MFA.
+- `error code: 1020`: a WAF custom rule (country or IP block) matched: add the same Skip rule above it.
+- A `location:` to `cloudflareaccess.com`: Cloudflare Access protects the site: add an Access
+  application for `marketinghub.cytron.io/render-agent` with a **Bypass** policy (Everyone).
+- No `server: cloudflare` line: the machine's own network (office firewall or proxy) blocks it.
+
 ## Files
 - `agent.mjs`: the helper (polls the Hub, runs Claude Code, runs the engine, uploads).
 - `engine/`: the video engine. `engine/README.md` is how a video is written (Claude reads it).
